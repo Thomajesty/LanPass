@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用问答与改进建议
+    url: https://github.com/Thomajesty/LanPass/discussions
+    about: 不确定是不是 bug、或只是想提建议的，都放这里讨论更合适

@@ -1,0 +1,103 @@
+# ---- 内部开发 / 测试 / 发布过程文件（不随仓库分发）----
+# 这些脚本只服务于本机的开发调试与发布流程，对使用者没有意义。
+
+# 一次性探针 / 调试 / 诊断
+_probe_*.py
+_dbg_*.py
+_chk_*.py
+_diag_*.py
+_recv_diag.py
+_measure_sender.py
+_audit_*.py
+_audit_probe*.txt
+
+# 界面截图与像素校验
+_shot_*.py
+_crop_png.py
+_colprofile.py
+_bmpgrab.py
+shots/
+
+# 性能基准
+_bench_*.py
+
+# 回归测试与自检
+_test_*.py
+selftest*.py
+selftest_result.txt
+_accept_exe.py
+
+# 构建与发布工具
+build_exe.bat
+check_win7.py
+_gen_version_info.py
+_fill_doc_hash.py
+_getver.py
+_pack_delivery.py
+_pack_release.py
+_upd_docs_*.py
+_t_ver.bat
+make_icon.py
+check_icon.py
+
+# 收款码处理脚本（一次性）
+_make_qrcodes.py
+_fix_wx_logo.py
+_fix_poster_logo.py
+_work/
+
+# 内部文档
+审计报告*.md
+发布步骤*.md
+_release_notes_*.md
+_build_log*.txt
+
+# ---- 打包中间物（可完全再生，几百 MB）----
+_build/
+__pycache__/
+*.pyc
+*.pyo
+*.spec
+
+# ---- 历史发布包 ----
+_old_release/
+_old_*.exe.bak
+_old_*.bak
+# 仓库只跟踪**当版**的 exe 与校验信息（dist/LanPass_<当前版本>.exe）。
+# v3.9.0 改名：旧名 LanTransfer_ 的历史包同样全部忽略（用通配，别再逐条列版本号
+# —— 之前逐条列就漏过 3.8.5，导致那个 8.6MB 的 exe 被提交进仓库）。
+# 历史版本一律忽略 —— 旧 exe 已由 GitHub Release 存档，不必再占仓库体积。
+dist/*.zip
+# 所有历史版本的交付物（改名前后都覆盖）
+dist/LanTransfer_*.exe
+dist/LanTransfer_*.txt
+dist/LanTransfer_*.zip
+dist/LanPass_*.exe
+dist/LanPass_*.txt
+dist/LanPass_*.zip
+
+# ---- 本地专用 Python 环境（Win7 打包用的 3.8 x86）----
+_pyenv/
+
+# ---- 密钥与证书（自签证书由程序运行时自动生成，绝不上传）----
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# ---- 运行态 / 本地配置 ----
+lanshare_conf.json
+*.ltpart
+.part
+_shot_conf.json
+_drill/
+_t_share/
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+~$*
+*.swp

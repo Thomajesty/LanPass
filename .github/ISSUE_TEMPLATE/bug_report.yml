@@ -1,0 +1,26 @@
+name: 问题反馈
+description: 报告一个使用中遇到的问题
+title: "[问题] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: 出了什么问题
+      description: 描述你做了什么、期望什么、实际什么
+    validations:
+      required: true
+  - type: textarea
+    id: where
+    attributes:
+      label: 两台机器的情况
+      description: 发送端和接收端各是什么系统（如 Windows 10 22H2 / Windows 7 SP1）
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: 日志内容
+      description: 界面【日志】框里与本次问题相关的几行，粘贴原文即可
+    validations:
+      required: false

@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>局域网数据转移</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --panel:#ffffff; --panel-2:#fafbfc; --line:#e6e8ec; --line-2:#eef0f3;
+    --text:#1b1f26; --text-2:#5b6472; --text-3:#98a1ae;
+    --brand:#2563eb; --brand-soft:#eef3ff;
+    --ok:#16a34a; --warn:#d97706; --err:#dc2626; --info:#0891b2;
+    --shadow:0 1px 2px rgba(16,24,40,.04), 0 6px 20px rgba(16,24,40,.06);
+    --radius:10px;
+  }
+  html[data-theme="dark"]{
+    --bg:#0f1115; --panel:#171a20; --panel-2:#1c2027; --line:#262b34; --line-2:#20242c;
+    --text:#e8eaf0; --text-2:#a3abb8; --text-3:#6d7583;
+    --brand:#5b8cff; --brand-soft:#1b2438;
+    --ok:#4ade80; --warn:#fbbf24; --err:#f87171; --info:#22d3ee;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  button,input,select{font:inherit;color:inherit}
+  .wrap{max-width:1440px;margin:0 auto;padding:14px 16px 40px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .card+.card{margin-top:12px}
+  .card-h{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line-2)}
+  .card-h h2{margin:0;font-size:13px;font-weight:600;letter-spacing:.2px}
+  .card-h .sp{flex:1}
+  .card-b{padding:12px}
+
+  /* 顶栏 */
+  header.top{display:flex;align-items:center;gap:10px;padding:4px 2px 12px}
+  header.top .logo{
+    width:26px;height:26px;border-radius:7px;background:var(--brand);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700
+  }
+  header.top h1{margin:0;font-size:15px;font-weight:650}
+  header.top .ver{color:var(--text-3);font-size:11px}
+  header.top .sp{flex:1}
+
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;
+    background:var(--panel-2);border:1px solid var(--line);font-size:11.5px;color:var(--text-2)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--text-3)}
+  .dot.on{background:var(--ok);box-shadow:0 0 0 3px rgba(22,163,74,.14)}
+  .dot.off{background:var(--err);box-shadow:0 0 0 3px rgba(220,38,38,.13)}
+
+  /* 连接条 */
+  .conn{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px}
+  .fld{display:flex;flex-direction:column;gap:4px}
+  .fld>label{font-size:11px;color:var(--text-3);letter-spacing:.3px}
+  input[type=text],input[type=number],select{
+    height:32px;padding:0 10px;border:1px solid var(--line);border-radius:8px;
+    background:var(--panel-2);outline:none;transition:.15s;min-width:80px
+  }
+  input[type=text]:focus,input[type=number]:focus,select:focus{border-color:var(--brand);background:var(--panel)}
+  select{cursor:pointer}
+  .grow{flex:1;min-width:180px}
+  .chk{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-2);cursor:pointer;user-select:none}
+  .chk input{accent-color:var(--brand);width:15px;height:15px}
+
+  .btn{
+    height:32px;padding:0 13px;border-radius:8px;border:1px solid var(--line);
+    background:var(--panel-2);cursor:pointer;transition:.15s;white-space:nowrap;display:inline-flex;
+    align-items:center;gap:6px;color:var(--text)
+  }
+  .btn:hover{background:var(--panel);border-color:var(--text-3)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+  .btn.primary:hover{filter:brightness(1.07)}
+  .btn.sm{height:27px;padding:0 9px;font-size:12px;border-radius:7px}
+  .btn.danger{color:var(--err);border-color:rgba(220,38,38,.35)}
+  .btn.danger:hover{background:rgba(220,38,38,.07)}
+
+  /* 布局 */
+  .grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,1fr);gap:12px;align-items:start}
+  @media (max-width:980px){.grid{grid-template-columns:1fr}}
+
+  /* 文件表 */
+  .crumb{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--text-2);
+    padding:0 2px 9px;min-height:20px}
+  .crumb a{color:var(--brand);cursor:pointer;text-decoration:none}
+  .crumb a:hover{text-decoration:underline}
+  .crumb .sep{color:var(--text-3)}
+  .tbl{max-height:min(58vh,620px);overflow:auto;border:1px solid var(--line-2);border-radius:8px}
+  table{width:100%;border-collapse:collapse}
+  thead th{
+    position:sticky;top:0;z-index:1;background:var(--panel-2);text-align:left;font-weight:600;
+    font-size:11.5px;color:var(--text-3);padding:7px 10px;border-bottom:1px solid var(--line-2);
+    letter-spacing:.3px
+  }
+  tbody td{padding:6px 10px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:var(--panel-2)}
+  tbody tr.sel{background:var(--brand-soft)}
+  .nm{display:flex;align-items:center;gap:8px;min-width:0}
+  .nm .ico{width:18px;text-align:center;flex:0 0 18px;font-size:13px;opacity:.9}
+  .nm .txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .nm.dir .txt{color:var(--brand);cursor:pointer;font-weight:500}
+  .nm.dir .txt:hover{text-decoration:underline}
+  .mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .mut{color:var(--text-3)}
+  .num{text-align:right;white-space:nowrap}
+  .empty{padding:26px;text-align:center;color:var(--text-3);font-size:12.5px}
+
+  /* 清单 */
+  .cart{max-height:190px;overflow:auto;border:1px solid var(--line-2);border-radius:8px}
+  .ci{display:flex;align-items:center;gap:8px;padding:5px 9px;border-bottom:1px solid var(--line-2);font-size:12.5px}
+  .ci:last-child{border-bottom:none}
+  .ci .p{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ci .x{cursor:pointer;color:var(--text-3);padding:0 3px;border-radius:4px}
+  .ci .x:hover{color:var(--err);background:rgba(220,38,38,.08)}
+
+  .row{display:flex;align-items:center;gap:8px}
+  .row+.row{margin-top:9px}
+  .row>label.k{width:74px;flex:0 0 74px;font-size:12px;color:var(--text-2)}
+  .hint{font-size:11.5px;color:var(--text-3);margin-top:6px;line-height:1.5}
+
+  /* 进度 */
+  .bar{height:6px;border-radius:999px;background:var(--line);overflow:hidden}
+  .bar>i{display:block;height:100%;background:var(--brand);width:0;transition:width .25s;border-radius:999px}
+  .bar.ok>i{background:var(--ok)}
+  .bar.err>i{background:var(--err)}
+  .task{padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;margin-bottom:8px}
+  .task .th{display:flex;align-items:center;gap:8px;font-size:12.5px;margin-bottom:6px}
+  .task .th .t{font-weight:600}
+  .task .th .sp{flex:1}
+  .tag{font-size:11px;padding:1px 7px;border-radius:999px;background:var(--panel-2);border:1px solid var(--line);color:var(--text-2)}
+  .tag.done{color:var(--ok);border-color:rgba(22,163,74,.3);background:rgba(22,163,74,.08)}
+  .tag.run{color:var(--brand);border-color:rgba(37,99,235,.3);background:rgba(37,99,235,.08)}
+  .tag.err{color:var(--err);border-color:rgba(220,38,38,.3);background:rgba(220,38,38,.08)}
+  .tag.skip{color:var(--warn);border-color:rgba(217,119,6,.3);background:rgba(217,119,6,.08)}
+  .flist{max-height:260px;overflow:auto;border-top:1px dashed var(--line-2);margin-top:6px;padding-top:6px}
+  .fr{display:flex;align-items:center;gap:8px;font-size:12px;padding:2.5px 0}
+  .fr .fn{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2)}
+  .fr .fs{width:80px;text-align:right;color:var(--text-3);font-size:11.5px}
+
+  /* 模态 */
+  .mask{position:fixed;inset:0;background:rgba(12,15,20,.45);display:none;align-items:center;
+    justify-content:center;z-index:60;padding:20px}
+  .mask.on{display:flex}
+  .modal{width:min(680px,96vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    box-shadow:0 20px 60px rgba(0,0,0,.28);overflow:hidden}
+  .modal .mh{padding:11px 14px;border-bottom:1px solid var(--line-2);display:flex;align-items:center;gap:8px}
+  .modal .mb{padding:12px 14px;max-height:52vh;overflow:auto}
+  .modal .mf{padding:10px 14px;border-top:1px solid var(--line-2);display:flex;gap:8px;justify-content:flex-end}
+  .dirl{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:12.5px}
+  .dirl:hover{background:var(--panel-2)}
+  #toast{position:fixed;right:16px;bottom:16px;z-index:99;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+  .toast{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--brand);
+    border-radius:8px;padding:8px 12px;font-size:12.5px;box-shadow:var(--shadow);max-width:380px;animation:in .18s}
+  .toast.err{border-left-color:var(--err)} .toast.ok{border-left-color:var(--ok)}
+  @keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--brand);
+    border-radius:50%;animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:var(--text-3);opacity:.4;border-radius:9px}
+  ::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="logo">⇄</div>
+    <h1>局域网数据转移</h1>
+    <span class="ver" id="ver"></span>
+    <div class="sp"></div>
+    <span class="pill"><span class="dot" id="connDot"></span><span id="connText">未连接</span></span>
+    <button class="btn sm" id="btnTheme" title="切换主题">◐ 主题</button>
+  </header>
+
+  <!-- 1. 连接发送端 -->
+  <section class="card">
+    <div class="card-h"><h2>① 连接发送端（旧电脑）</h2><span class="sp"></span></div>
+    <div class="card-b">
+      <div class="conn">
+        <div class="fld grow">
+          <label>自动发现的发送端（同一局域网，每 2 秒广播）</label>
+          <select id="found"><option value="">— 未发现，请手动填写 IP —</option></select>
+        </div>
+        <div class="fld"><label>IP 地址</label><input type="text" id="host" placeholder="192.168.1.10" style="width:142px"></div>
+        <div class="fld"><label>端口</label><input type="number" id="port" value="8788" style="width:88px"></div>
+        <div class="fld"><label>访问令牌（可空）</label><input type="text" id="token" placeholder="发送端启动时的 --token" style="width:150px"></div>
+        <button class="btn primary" id="btnConn">连接</button>
+      </div>
+      <div class="hint" id="connHint">发送端在这台电脑上还没跑？去旧电脑执行：<code>python lan_transfer.py serve --root "D:\资料" --token 你的密码</code></div>
+    </div>
+  </section>
+
+  <div class="grid" style="margin-top:12px">
+
+    <!-- 2. 远程文件列表 -->
+    <section class="card" style="margin-top:0">
+      <div class="card-h">
+        <h2>② 远程文件列表</h2>
+        <span class="sp"></span>
+        <input type="text" id="q" placeholder="搜索文件名…" style="width:150px;height:27px">
+        <button class="btn sm" id="btnSearch">搜索</button>
+        <button class="btn sm" id="btnUp">↑ 上一级</button>
+        <button class="btn sm" id="btnRefresh">刷新</button>
+        <button class="btn sm" id="btnAddCur">加入当前目录</button>
+      </div>
+      <div class="card-b">
+        <div class="crumb" id="crumb"></div>
+        <div class="tbl">
+          <table>
+            <thead><tr>
+              <th style="width:30px"><input type="checkbox" id="chkAll" title="全选本页"></th>
+              <th>名称</th>
+              <th style="width:96px" class="num">大小</th>
+              <th style="width:132px">修改时间</th>
+            </tr></thead>
+            <tbody id="tbody"><tr><td colspan="4" class="empty">请先连接发送端</td></tr></tbody>
+          </table>
+        </div>
+        <div class="row" style="margin-top:9px">
+          <span class="pill">已选 <b id="selCount">0</b> 项 · <span class="mono" id="selSize">0 B</span></span>
+          <span class="sp" style="flex:1"></span>
+          <button class="btn sm" id="btnClearSel">清空选择</button>
+          <button class="btn sm primary" id="btnAdd">加入传输清单 →</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 清单 + 目标 -->
+    <section class="card" style="margin-top:0">
+      <div class="card-h"><h2>③ 传输清单与目标位置</h2><span class="sp"></span>
+        <span class="pill" id="cartStat">0 项</span></div>
+      <div class="card-b">
+        <div class="cart" id="cart"><div class="empty">清单为空</div></div>
+        <div class="row" style="margin-top:10px">
+          <label class="k">目标目录</label>
+          <input type="text" id="dest" class="grow" placeholder="D:\新电脑备份">
+          <button class="btn sm" id="btnPick">浏览…</button>
+        </div>
+        <div class="row">
+          <label class="k">目录结构</label>
+          <select id="layout" class="grow">
+            <option value="keep">保留源目录结构（推荐）</option>
+            <option value="flat">全部平铺到目标目录</option>
+          </select>
+        </div>
+        <div class="row">
+          <label class="k">同名冲突</label>
+          <select id="policy" class="grow">
+            <option value="skip">跳过（已存在的不动）</option>
+            <option value="overwrite">覆盖（用源文件替换）</option>
+            <option value="rename">自动重命名（加 (1)）</option>
+            <option value="newer">保留较新（本地更新则跳过）</option>
+          </select>
+        </div>
+        <div class="row">
+          <label class="k">并发数</label>
+          <input type="number" id="workers" value="3" min="1" max="8" style="width:70px">
+          <label class="chk"><input type="checkbox" id="verify"> 传输后 MD5 校验（慢）</label>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <label class="chk"><input type="checkbox" id="delSrc"> 传输完成后删除源文件（移动式，需发送端开启 --allow-delete）</label>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn primary grow" id="btnStart">开始拉取转存</button>
+          <button class="btn" id="btnStop" disabled>停止</button>
+        </div>
+        <div class="hint" id="destHint">文件会直接写入上面的目标目录，同目录下的 <code>.ltdownload</code> 是未完成的临时文件，中断后可续传。</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 4. 进度 -->
+  <section class="card">
+    <div class="card-h"><h2>④ 传输进度</h2><span class="sp"></span>
+      <span class="pill" id="totStat">空闲</span>
+      <button class="btn sm" id="btnClear">清空已完成</button>
+    </div>
+    <div class="card-b" id="tasks"><div class="empty">暂无任务</div></div>
+  </section>
+</div>
+
+<!-- 本地目录选择 -->
+<div class="mask" id="pickMask">
+  <div class="modal">
+    <div class="mh"><b>选择本机目标目录</b><span class="sp" style="flex:1"></span>
+      <button class="btn sm" id="pickNew">新建文件夹</button></div>
+    <div class="mb">
+      <div class="crumb" id="pickCrumb"></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px" id="pickRoots"></div>
+      <div id="pickList"></div>
+    </div>
+    <div class="mf">
+      <input type="text" id="pickPath" class="grow" style="min-width:0;flex:1">
+      <button class="btn" id="pickCancel">取消</button>
+      <button class="btn primary" id="pickOk">选中此目录</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const state = { list: [], path: "", sel: new Map(), cart: [], remote: null, dest: "", lastTaskId: null, searching: false };
+let pollTimer = null;
+
+/* ---------------- 基础 ---------------- */
+function fmtSize(n){
+  if(n===null||n===undefined) return '—';
+  n = Number(n); if(!isFinite(n)) return '—';
+  if(n < 1024) return n + ' B';
+  const u = ['KB','MB','GB','TB']; let i=-1;
+  do{ n/=1024; i++; }while(n>=1024 && i<u.length-1);
+  return n.toFixed(n<10?2:1) + ' ' + u[i];
+}
+function fmtTime(t){ if(!t) return '—'; const d=new Date(t*1000);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '
+        +String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function fmtDur(s){ if(s===null||s===undefined) return '—'; s=Math.max(0,Math.round(s));
+  const h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60;
+  return (h?h+'h ':'') + (h||m?m+'m ':'') + x+'s'; }
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function toast(msg, kind){
+  const el = document.createElement('div');
+  el.className = 'toast ' + (kind||'');
+  el.textContent = msg;
+  $('#toast').appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; el.style.transition='.3s'; setTimeout(()=>el.remove(),320); }, kind==='err'?5200:2800);
+}
+async function api(path, opts){
+  const r = await fetch(path, opts);
+  let j = null;
+  try{ j = await r.json(); }catch(e){ throw new Error('返回不是 JSON (HTTP '+r.status+')'); }
+  if(!r.ok || j.error) throw new Error(j.message || j.error || ('HTTP '+r.status));
+  return j;
+}
+function post(path, body){
+  return api(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body||{})});
+}
+
+/* ---------------- 主题 ---------------- */
+(function(){
+  const saved = localStorage.getItem('lt-theme');
+  if(saved) document.documentElement.dataset.theme = saved;
+  $('#btnTheme').onclick = ()=>{
+    const cur = document.documentElement.dataset.theme === 'dark' ? '' : 'dark';
+    document.documentElement.dataset.theme = cur;
+    localStorage.setItem('lt-theme', cur);
+  };
+})();
+
+/* ---------------- 连接 ---------------- */
+function setConn(ok, text){
+  $('#connDot').className = 'dot ' + (ok?'on':'off');
+  $('#connText').textContent = text;
+}
+$('#btnConn').onclick = async ()=>{
+  const host = $('#host').value.trim();
+  if(!host) return toast('请填写发送端 IP', 'err');
+  try{
+    const j = await post('/api/connect', {host, port:+$('#port').value, token:$('#token').value.trim()});
+    const i = j.info;
+    state.remote = {host, port:+$('#port').value};
+    setConn(true, '已连接 ' + i.hostname);
+    $('#connHint').innerHTML = '已连接：<b>'+esc(i.hostname)+'</b> · 系统 '+esc(i.platform)
+      +' · 共享根目录 <code>'+esc(i.root)+'</code>' + (i.allow_delete?' · <b>已开启删除权限</b>':'');
+    $('#delSrc').disabled = !i.allow_delete;
+    toast('已连接发送端 ' + i.hostname, 'ok');
+    if(!$('#dest').value) $('#dest').value = state.dest || '';
+    load('', false);
+  }catch(e){ setConn(false,'连接失败'); toast('连接失败：'+e.message, 'err'); }
+};
+$('#found').onchange = ()=>{
+  const v = $('#found').value;
+  if(v){ const [h,p] = v.split(':'); $('#host').value = h; $('#port').value = p; $('#btnConn').click(); }
+};
+$('#btnUp').onclick = ()=> load(state.parent === null ? state.path : (state.parent||''), false);
+$('#btnRefresh').onclick = ()=> load(state.path, false);
+$('#btnSearch').onclick = ()=>{ const q=$('#q').value.trim(); if(!q) return load('', false); doSearch(q); };
+$('#q').onkeydown = e=>{ if(e.key==='Enter') $('#btnSearch').click(); };
+
+async function doSearch(q){
+  try{
+    const j = await api('/api/remote/search?path='+encodeURIComponent(state.path||'')+'&q='+encodeURIComponent(q));
+    state.list = j.hits.map(h=>({...h, isHit:true}));
+    state.searching = true;
+    renderCrumb(); renderList();
+    toast('搜索到 ' + j.hits.length + ' 项' + (j.truncated?'（已截断）':''));
+  }catch(e){ toast('搜索失败：'+e.message, 'err'); }
+}
+
+async function load(path, keepSel){
+  if(!state.remote) return;
+  try{
+    const j = await api('/api/remote/list?path='+encodeURIComponent(path));
+    state.list = j.entries; state.path = j.path; state.parent = j.parent;
+    state.searching = false;
+    if(!keepSel){ state.sel.clear(); }
+    renderCrumb(); renderList(); updateSel();
+  }catch(e){ toast('读取目录失败：'+e.message, 'err'); }
+}
+
+function renderCrumb(){
+  const c = $('#crumb');
+  if(state.searching){ c.innerHTML = '<span class="mut">搜索结果（<a id="crumbBack">返回浏览</a>）</span>';
+    $('#crumbBack').onclick = ()=>load(state.path,false); return; }
+  const parts = (state.path||'').split('/').filter(Boolean);
+  let html = '<a data-p="">根目录</a>';
+  let acc = '';
+  parts.forEach(p=>{ acc = (acc?acc+'/':'')+p; html += ' <span class="sep">/</span> <a data-p="'+esc(acc)+'">'+esc(p)+'</a>'; });
+  c.innerHTML = html;
+  c.querySelectorAll('a[data-p]').forEach(a=> a.onclick = ()=> load(a.dataset.p, false));
+}
+
+const ICON = {dir:'📁', file:'📄', img:'🖼️', vid:'🎬', aud:'🎵', zip:'🗜️', doc:'📝', code:'⌨️', exe:'⚙️'};
+function iconOf(e){
+  if(e.dir) return ICON.dir;
+  const x = (e.name.split('.').pop()||'').toLowerCase();
+  if(['png','jpg','jpeg','gif','bmp','webp','heic','svg'].includes(x)) return ICON.img;
+  if(['mp4','mkv','avi','mov','wmv','flv','ts','rmvb'].includes(x)) return ICON.vid;
+  if(['mp3','wav','flac','aac','m4a','ogg'].includes(x)) return ICON.aud;
+  if(['zip','rar','7z','tar','gz','iso'].includes(x)) return ICON.zip;
+  if(['doc','docx','xls','xlsx','ppt','pptx','pdf','txt','md'].includes(x)) return ICON.doc;
+  if(['js','ts','py','php','java','c','cpp','go','rs','json','html','css','sql','sh','bat'].includes(x)) return ICON.code;
+  if(['exe','msi','dll','apk','app'].includes(x)) return ICON.exe;
+  return ICON.file;
+}
+function renderList(){
+  const tb = $('#tbody');
+  if(!state.list.length){ tb.innerHTML = '<tr><td colspan="4" class="empty">空目录</td></tr>'; $('#chkAll').checked=false; return; }
+  tb.innerHTML = state.list.map((e,i)=>{
+    const k = e.path;
+    const on = state.sel.has(k) ? ' sel' : '';
+    return '<tr class="'+on.trim()+'" data-i="'+i+'">'
+      + '<td><input type="checkbox" data-k="'+esc(k)+'" '+(on?'checked':'')+'></td>'
+      + '<td><div class="nm '+(e.dir?'dir':'')+'"><span class="ico">'+iconOf(e)+'</span>'
+      + '<span class="txt" data-nav="'+(e.dir?esc(e.path):'')+'" title="'+esc(e.path)+'">'+esc(e.name)+'</span></div></td>'
+      + '<td class="num mono mut">'+(e.dir?'目录':fmtSize(e.size))+'</td>'
+      + '<td class="mut mono" style="font-size:11.5px">'+fmtTime(e.mtime)+'</td></tr>';
+  }).join('');
+  tb.querySelectorAll('tr').forEach(tr=>{
+    tr.onclick = ev=>{
+      const cb = tr.querySelector('input[type=checkbox]');
+      if(ev.target.tagName === 'INPUT'){ toggle(state.list[+tr.dataset.i], cb.checked); return; }
+      cb.checked = !cb.checked; toggle(state.list[+tr.dataset.i], cb.checked);
+    };
+  });
+  tb.querySelectorAll('[data-nav]').forEach(el=>{
+    if(!el.dataset.nav) return;
+    el.onclick = ev=>{ ev.stopPropagation(); load(el.dataset.nav, false); };
+  });
+  $('#chkAll').checked = state.list.every(e=>state.sel.has(e.path));
+}
+function toggle(e, on){
+  if(on) state.sel.set(e.path, e); else state.sel.delete(e.path);
+  renderList(); updateSel();
+}
+$('#chkAll').onchange = ()=>{
+  if($('#chkAll').checked) state.list.forEach(e=>state.sel.set(e.path,e)); else state.sel.clear();
+  renderList(); updateSel();
+};
+$('#btnClearSel').onclick = ()=>{ state.sel.clear(); renderList(); updateSel(); };
+function updateSel(){
+  $('#selCount').textContent = state.sel.size;
+  let n = 0, unknown = false;
+  state.sel.forEach(e=>{ if(e.dir) unknown = true; else n += (e.size||0); });
+  $('#selSize').textContent = fmtSize(n) + (unknown ? ' + 目录' : '');
+}
+
+/* ---------------- 清单 ---------------- */
+async function fillCartSizes(){
+  for(const c of state.cart){
+    if(c.dir && c.count===null){
+      try{
+        const j = await api('/api/remote/walk?path='+encodeURIComponent(c.path));
+        c.count = j.files.length; c.size = j.files.reduce((a,b)=>a+(b.size||0),0);
+      }catch(e){ c.count = -1; }
+      renderCart();
+    }
+  }
+}
+$('#btnAddCur').onclick = ()=>{
+  if(!state.remote) return toast('请先连接发送端','err');
+  const name = state.path ? state.path.split('/').pop() : '（整个共享根目录）';
+  if(state.cart.some(c=>c.dir && c.path===state.path)) return toast('当前目录已在清单中');
+  state.cart.push({name, path:state.path, dir:true, size:0, mtime:0, count:null});
+  renderCart(); fillCartSizes();
+};
+$('#btnAdd').onclick = async ()=>{
+  if(!state.sel.size) return toast('还没有勾选任何文件', 'err');
+  let added = 0;
+  state.sel.forEach(e=>{
+    if(state.cart.some(c=>c.path===e.path)) return;
+    state.cart.push({name:e.name, path:e.path, dir:!!e.dir, size:e.size||0, mtime:e.mtime||0, count:null});
+    added++;
+  });
+  renderCart(); state.sel.clear(); renderList(); updateSel();
+  toast(added ? ('已加入 ' + added + ' 项') : '这些项已在清单中', added?'ok':'');
+  fillCartSizes();
+};
+function renderCart(){
+  const el = $('#cart');
+  if(!state.cart.length){ el.innerHTML = '<div class="empty">清单为空</div>'; $('#cartStat').textContent='0 项'; return; }
+  el.innerHTML = state.cart.map((c,i)=>{
+    const sz = c.dir ? (c.count===null?'<span class="spin"></span>':(c.count<0?'统计失败':c.count+' 个文件 · '+fmtSize(c.size))) : fmtSize(c.size);
+    return '<div class="ci"><span>'+(c.dir?ICON.dir:ICON.file)+'</span>'
+      + '<span class="p" title="'+esc(c.path)+'">'+esc(c.path)+'</span>'
+      + '<span class="mut mono" style="font-size:11.5px">'+sz+'</span>'
+      + '<span class="x" data-i="'+i+'">✕</span></div>';
+  }).join('');
+  el.querySelectorAll('.x').forEach(x=> x.onclick = ()=>{ state.cart.splice(+x.dataset.i,1); renderCart(); });
+  const files = state.cart.reduce((a,c)=>a + (c.dir ? (c.count||0) : 1), 0);
+  const bytes = state.cart.reduce((a,c)=>a + (c.size||0), 0);
+  $('#cartStat').textContent = state.cart.length + ' 项 · ' + files + ' 个文件 · ' + fmtSize(bytes);
+}
+
+/* ---------------- 传输 ---------------- */
+$('#btnStart').onclick = async ()=>{
+  if(!state.cart.length) return toast('传输清单是空的', 'err');
+  if(!state.remote) return toast('请先连接发送端', 'err');
+  const dest = $('#dest').value.trim();
+  if(!dest) return toast('请选择目标目录', 'err');
+  if($('#delSrc').checked && !confirm('确认：传输完成后会删除【旧电脑上】的源文件！\n\n目标目录：'+dest+'\n\n此操作不可撤销，确定继续？')) return;
+  $('#btnStart').disabled = true;
+  try{
+    const j = await post('/api/transfer', {
+      items: state.cart.map(c=>({path:c.path, dir:c.dir, size:c.size, mtime:c.mtime})),
+      dest, policy: $('#policy').value,
+      flatten: $('#layout').value === 'flat',
+      verify: $('#verify').checked,
+      delete_source: $('#delSrc').checked,
+      workers: +$('#workers').value || 3
+    });
+    toast('已开始：' + j.files + ' 个文件 / ' + fmtSize(j.bytes), 'ok');
+    state.cart = []; renderCart(); $('#btnStop').disabled = false;
+    poll();
+  }catch(e){ toast('启动失败：'+e.message, 'err'); }
+  finally{ $('#btnStart').disabled = false; }
+};
+$('#btnStop').onclick = async ()=>{
+  try{
+    const j = await api('/api/state');
+    for(const t of j.transfers) if(t.state==='running') await post('/api/task/stop', {id:t.id});
+    toast('已发送停止指令');
+  }catch(e){ toast(e.message, 'err'); }
+};
+$('#btnClear').onclick = ()=>{ post('/api/tasks/clear',{}).then(()=>poll()).catch(e=>toast(e.message,'err')); };
+
+function renderTasks(ts){
+  const box = $('#tasks');
+  if(!ts.length){ box.innerHTML = '<div class="empty">暂无任务</div>'; $('#totStat').textContent='空闲'; $('#btnStop').disabled=true; return; }
+  const active = ts.filter(t=>t.state==='running');
+  let tb = 0, td = 0, tf = 0, tdf = 0;
+  ts.forEach(t=>{ tb+=t.total_bytes; td+=t.done_bytes+t.skipped_bytes; tf+=t.total_files; tdf+=t.done_files+t.skipped; });
+  const overall = tb ? Math.min(100, (td/tb*100)) : (tf? 100 : 0);
+  $('#totStat').textContent = active.length
+    ? '进行中 '+active.length+' · '+tdf+'/'+tf+' 文件 · '+overall.toFixed(1)+'%'
+    : '已完成 '+ts.length+' 个任务';
+  $('#btnStop').disabled = !active.length;
+  box.innerHTML = ts.slice().reverse().map(t=>{
+    const denom = t.total_bytes || 1;
+    const pct = Math.min(100, ((t.done_bytes + t.skipped_bytes)/denom)*100);
+    const st = {running:['run','进行中'],done:['done','已完成'],stopped:['skip','已停止']}[t.state] || ['',''];
+    const head = '<div class="th"><span class="t">'+esc(t.dest)+'</span>'
+      + '<span class="tag '+st[0]+'">'+st[1]+'</span>'
+      + (t.failed? '<span class="tag err">失败 '+t.failed+'</span>':'')
+      + (t.skipped? '<span class="tag skip">跳过 '+t.skipped+'</span>':'')
+      + '<span class="sp"></span>'
+      + '<span class="mono mut" style="font-size:11.5px">'+t.done_files+'/'+t.total_files+' · '+fmtSize(t.done_bytes+(t.skipped_bytes?0:0))+' / '+fmtSize(t.total_bytes)+'</span>'
+      + '<span class="mono mut" style="font-size:11.5px">'+(t.state==='running'? (fmtSize(t.speed)+'/s · 剩余 '+fmtDur(t.eta)) : ('耗时 '+fmtDur(t.elapsed)))+'</span>'
+      + (t.state==='running' ? '<button class="btn sm" data-stop="'+t.id+'">停止</button>' : '')
+      + '</div>';
+    const rows = t.files.map(f=>{
+      const cls = {done:'',failed:'err',skipped:'skip',running:'run',pending:'',stopped:'skip'}[f.status]||'';
+      const s = {done:'完成',failed:'失败',skipped:'跳过',running:'传输中',pending:'等待',stopped:'停止'}[f.status]||f.status;
+      return '<div class="fr"><span>'+(f.status==='done'?'✔':f.status==='failed'?'✖':f.status==='skipped'?'⤼':'•')+'</span>'
+        + '<span class="fn" title="'+esc(f.rel)+'">'+esc(f.rel)+(f.err?' — <span style="color:var(--err)">'+esc(f.err)+'</span>':'')+'</span>'
+        + '<span class="fs mono">'+fmtSize(f.size)+'</span>'
+        + '<span class="tag '+cls+'" style="min-width:52px;text-align:center">'+s+'</span></div>';
+    }).join('');
+    return '<div class="task">'+head+'<div class="bar '+(t.state==='done'?'ok':'')+'"><i style="width:'+pct.toFixed(1)+'%"></i></div>'
+      + '<div class="flist">'+(rows||'<div class="mut" style="font-size:12px">展开中…</div>')
+      + (t.files_truncated?'<div class="mut" style="font-size:11.5px;padding:4px">（列表仅显示前 400 条）</div>':'')
+      + '</div></div>';
+  }).join('');
+  box.querySelectorAll('[data-stop]').forEach(b=> b.onclick = ()=>post('/api/task/stop',{id:b.dataset.stop}).then(()=>{}).catch(e=>toast(e.message,'err')));
+}
+
+async function poll(){
+  try{
+    const j = await api('/api/state');
+    const r = j.remote || {};
+    if(!$('#host').value && r.host && r.host !== '') $('#host').value = r.host;
+    if(r.host && r.port && r.host !== '') $('#port').value = r.port;
+    if(r.connected && !state.remote){
+      state.remote = {host:r.host, port:r.port};
+      setConn(true, '已连接 ' + ((r.info||{}).hostname || r.host));
+      $('#delSrc').disabled = !(r.info||{}).allow_delete;
+      $('#connHint').innerHTML = '已连接：<b>'+esc((r.info||{}).hostname||'')+'</b> · 共享根目录 <code>'+esc((r.info||{}).root||'')+'</code>'
+        + ((r.info||{}).allow_delete ? ' · <b>已开启删除权限</b>' : '');
+      if(!state.list.length) load('', false);
+    }
+    if(!r.connected && state.remote){ state.remote = null; setConn(false, '连接已断开'); }
+    if(j.dest && !$('#dest').value) $('#dest').value = j.dest;
+    state.dest = j.dest;
+    renderFound(j.discovered||[]);
+    renderTasks(j.transfers||[]);
+    const active = (j.transfers||[]).some(t=>t.state==='running');
+    schedule(active ? 700 : 2500);
+  }catch(e){ schedule(2500); }
+}
+function schedule(ms){
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(poll, ms);
+}
+let foundSig = '';
+function renderFound(list){
+  const sig = list.map(d=>d.ip+':'+d.port).join(',');
+  if(sig === foundSig) return;
+  foundSig = sig;
+  const el = $('#found');
+  if(!list.length){ el.innerHTML = '<option value="">— 未发现，请手动填写 IP —</option>'; return; }
+  el.innerHTML = '<option value="">— 选择一个已发现的发送端 —</option>' + list.map(d=>
+    '<option value="'+esc(d.ip)+':'+d.port+'">'+esc(d.host)+' @ '+esc(d.ip)+':'+d.port+' （'+esc(d.root)+'）</option>').join('');
+}
+renderFound([]);
+
+/* ---------------- 本地目录选择 ---------------- */
+let pickState = {path:'', parent:null, roots:[]};
+$('#btnPick').onclick = ()=>openPick($('#dest').value.trim() || state.dest || '');
+$('#pickCancel').onclick = ()=> $('#pickMask').classList.remove('on');
+$('#pickMask').onclick = e=>{ if(e.target.id==='pickMask') $('#pickMask').classList.remove('on'); };
+$('#pickOk').onclick = ()=>{
+  const p = $('#pickPath').value.trim();
+  if(!p) return toast('请选择目录', 'err');
+  $('#dest').value = p; $('#pickMask').classList.remove('on'); toast('目标目录：'+p, 'ok');
+};
+$('#pickNew').onclick = async ()=>{
+  const name = prompt('新文件夹名称（建在当前目录下）：');
+  if(!name) return;
+  try{
+    const r = await post('/api/local/mkdir', {path: pickState.path + (pickState.path.endsWith('\\')||pickState.path.endsWith('/')?'':'\\') + name});
+    toast('已创建 '+r.path,'ok'); openPick(r.path);
+  }catch(e){ toast(e.message,'err'); }
+};
+async function openPick(path){
+  $('#pickMask').classList.add('on'); pickLoad(path);
+}
+$('#pickPath').onkeydown = e=>{ if(e.key==='Enter') pickLoad($('#pickPath').value.trim()); };
+async function pickLoad(path){
+  try{
+    const j = await api('/api/local/list?path='+encodeURIComponent(path||''));
+    pickState = {path:j.path, parent:j.parent, roots:j.roots};
+    $('#pickPath').value = j.path || '';
+    $('#pickRoots').innerHTML = (j.roots||[]).map(r=>'<button class="btn sm" data-r="'+esc(r)+'">'+esc(r)+'</button>').join('');
+    $('#pickRoots').querySelectorAll('[data-r]').forEach(b=> b.onclick = ()=>pickLoad(b.dataset.r));
+    const c = $('#pickCrumb');
+    if(j.path){
+      const sep = j.path.includes('\\') ? '\\' : '/';
+      const segs = j.path.split(sep).filter(Boolean);
+      let acc = '', html = '';
+      segs.forEach((s,i)=>{ acc = acc ? acc+sep+s : (sep==='\\'? s+sep : sep+s);
+        html += (i?' <span class="sep">'+sep+'</span> ':'') + '<a data-p="'+esc(acc)+'">'+esc(s)+'</a>'; });
+      c.innerHTML = html;
+      c.querySelectorAll('a[data-p]').forEach(a=> a.onclick = ()=>pickLoad(a.dataset.p));
+    } else c.innerHTML = '<span class="mut">请选择磁盘</span>';
+    $('#pickList').innerHTML = (j.entries||[]).map(e=>
+      '<div class="dirl" data-p="'+esc(e.path)+'"><span>📁</span><span style="flex:1">'+esc(e.name)+'</span><span class="mut" style="font-size:11px">双击进入 · 单击选中</span></div>'
+    ).join('') || '<div class="empty" style="padding:14px">没有子目录</div>';
+    $('#pickList').querySelectorAll('.dirl').forEach(d=>{
+      d.onclick = ()=> $('#pickPath').value = d.dataset.p;
+      d.ondblclick = ()=> pickLoad(d.dataset.p);
+    });
+  }catch(e){ toast(e.message,'err'); }
+}
+
+/* ---------------- 启动 ---------------- */
+setConn(false, '未连接');
+poll();
+</script>
+</body>
+</html>

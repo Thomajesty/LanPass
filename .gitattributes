@@ -1,0 +1,28 @@
+# 换行符策略：分两类处理，别一刀切
+#
+# 【第一类】源码与配置 —— 仓库内存LF，检出时按平台自动转换
+# 为什么要这样：若不声明，Git 按 core.autocrlf逐个文件判断，同一份文本在
+# Windows 上是 CRLF、Linux 上是 LF，每次换平台都整文件变更，看起来像
+# "改了很多行"其实只是换行符差异，review 时全是噪声。
+*.py              text=auto eol=lf
+*.md              text=auto eol=lf
+*.yml              text=auto eol=lf
+ui.html           text=auto eol=lf
+version_info.txt  text=auto eol=lf
+.gitattributes          text eol=lf
+.gitignore              text eol=lf
+.github/**/*.yml       text eol=lf
+
+# 【第二类】用户会直接下载的产物 —— 原样存储，不做任何转换
+# ⚠ 这条很关键，别改成text：
+#   dist 下的手册 txt 是**从网页直接下载**给用户的，不经过 git 检出，
+#   仓库里存的就是用户拿到的那一份。内容用全角空格做表格对齐，
+#   老版本 Windows 记事本（Win7/8）对 LF 支持不好，会把整篇显示成一行。
+#   一旦被当文本规范化成 LF，下载下来就是坏的。
+# 同理 *.bat 用 CRLF 在部分 Windows 版本上解析更稳。
+dist/*.txt        -text
+*.bat             -text
+
+# 二进制，不做换行转换
+*.ico             binary
+*.png             binary
