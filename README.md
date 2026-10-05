@@ -76,20 +76,20 @@ LanPass.exe --port 8899
 
 **推荐从 [Releases 页面](../../releases/latest) 下载** —— 程序本体 + 手册打包在一起，不用逐个点。
 
-当前版本 **3.9.0**：
+当前版本 **3.9.1**：
 
 | Release 里的文件 | 说明 | 大小 |
 |---|---|---|
-| `LanPass_3.9.0.exe` | 程序本体，绿色免安装 | 见 Release |
-| `LanPass_3.9.0_Manual.zip` | 操作手册（完整版）+ 使用说明（简明版） | 见 Release |
-| `LanPass_3.9.0_Checksums.txt` | MD5 校验值、变更说明 | 见 Release |
+| `LanPass_3.9.1.exe` | 程序本体，绿色免安装 | 见 Release |
+| `LanPass_3.9.1_Manual.zip` | 操作手册（完整版）+ 使用说明（简明版） | 见 Release |
+| `LanPass_3.9.1_Checksums.txt` | MD5 校验值、变更说明 | 见 Release |
 
 源码目录 `dist/` 里还有原中文名的同名文件（`操作手册.txt`、`使用说明-简明版.txt` 等），内容一致。
 
 核对文件完整性：
 
 ```bat
-certutil -hashfile LanPass_3.9.0.exe MD5
+certutil -hashfile LanPass_3.9.1.exe MD5
 :: 期望值见 Release 中的 _Checksums.txt
 ```
 
