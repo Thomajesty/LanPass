@@ -18488,7 +18488,22 @@ ABOUT_INTRO = (
     "%s（%s）是一款局域网双机文件互传工具。两台电脑连在同一个局域网"
     "（同一个路由器或同一个 Wi-Fi）里，不用数据线、不用 U 盘，也不经过互联网，"
     "文件直接在这两台机器之间走。传输默认启用 HTTPS 加密，接收端要填对方窗口上"
-    "显示的 6 位访问令牌才能连上。" % (APP_CN, APP_NAME)
+    "显示的 6 位访问令牌才能连上。换新电脑、重装系统、整机搬迁的时候，"
+    "也可以用它把旧机器上的数据整体搬到新机器上。" % (APP_CN, APP_NAME)
+)
+
+# 【适用场景】独立成节，而不是把换机塞进「软件简介」里一句话带过。
+# 原因：换机是本程序最被低估的用法（用户第一反应往往是"插 U 盘"或"走网盘"），
+# 摆在独立小节里，扫一眼就知道"哦原来是干这个的"。
+# ⚠ 用 FONT_S（小字）：这一节是"补充说明"性质，和「运行环境」下的当前系统判断、
+#   「免责声明」同级，用小字既符合既有惯例，也省出窗口高度。
+ABOUT_SCENES = (
+    "· 换新电脑 / 重装系统：旧机器的桌面、文档、照片整目录搬过去 —— 数据从旧机器"
+    "直接落到新机器，不过云盘中转，没有「上传到一半断网」的麻烦。\n"
+    "· 几十上百 GB 的整盘资料：自动分段并行，实测提速 3.9～4.8 倍；中途断了不用"
+    "从头再来，重新发起就从断点续上。\n"
+    "· 两台机器日常互传：不用数据线、不用 U 盘，也不用发微信（有大小限制、还会压缩）。\n"
+    "· 系统重装前抢救数据：趁数据都还在原机器上时，先把要紧的拉到新机器或外置盘。\n"
 )
 
 ABOUT_STEPS = (
@@ -18550,11 +18565,14 @@ class AboutWindow(object):
         # 1000 宽是为了让两栏各自放得下内容：右栏要摆两张 218px 的收款码
         # （含间距约 500px），左栏要摆 192px 大图标 + 几行文字
         # （两栏各半，1000/2=500 再减 padding 刚好够，故取 1000）。
-        # 高 880：正文（软件简介→免责声明）完整排下来约 820px，780 时底部的
-        # 「免责声明」必须滚动才看得到。880 能一屏基本看全，用户也方便截图核对。
+        # 高 950：正文（软件简介→适用场景→运行环境→使用说明→常见问题→免责声明）
+        # 实测自然排下来约 1060px（含顶部区 313px），所以要滚动才看得全 ——
+        # 这是有意保留的：正文加了「适用场景」一节后，一屏已经装不下，
+        # 而正文区本来就有 Scrollbar，滚动是兜底，不必硬撑到一屏。
         # ⚠ 窗口**比屏幕高**会被 Windows 回夹、rooty 变负（截图错位）——
         #   所以这个值要保持在常见屏幕可用高度（约 1040@1080p，减任务栏）以内。
-        t.geometry("%dx%d" % (px(1000), px(880)))
+        #   950 是实测上限附近，再往上 1080p 屏幕上就会顶格。
+        t.geometry("%dx%d" % (px(1000), px(950)))
         t.minsize(px(820), px(520))
         t.configure(bg=C_BG)
         apply_window_icon(t)
@@ -18887,6 +18905,8 @@ class AboutWindow(object):
 
         section("软件简介")
         self.intro_lbl = para(ABOUT_INTRO)
+        section("适用场景")
+        self.scene_lbl = para(ABOUT_SCENES, color=C_TXT3, font=FONT_S)
         section("运行环境")
         self.sys_lbl = para(ABOUT_SYS)
         # 光写"支持到 Win7"还不够 —— 用户真正想确认的是"我这台到底行不行"，
@@ -18906,8 +18926,9 @@ class AboutWindow(object):
         def _rewrap(_e=None):
             try:
                 w = max(px(320), body.winfo_width() - px(4))
-                for lb in (self.intro_lbl, self.sys_lbl, self.cur_sys_lbl,
-                           self.steps_lbl, self.faq_lbl, self.disc_lbl):
+                for lb in (self.intro_lbl, self.scene_lbl, self.sys_lbl,
+                           self.cur_sys_lbl, self.steps_lbl, self.faq_lbl,
+                           self.disc_lbl):
                     lb.configure(wraplength=w)
             except Exception:
                 pass
