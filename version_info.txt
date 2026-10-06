@@ -1,7 +1,7 @@
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(3, 9, 0, 0),
-    prodvers=(3, 9, 0, 0),
+    filevers=(3, 9, 2, 0),
+    prodvers=(3, 9, 2, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -15,12 +15,12 @@ VSVersionInfo(
         '080404B0',
         [StringStruct('CompanyName', 'Thomajesty'),
          StringStruct('FileDescription', '本地快传 LanPass —— 局域网两台电脑之间互传文件'),
-         StringStruct('FileVersion', '3.9.0.0'),
+         StringStruct('FileVersion', '3.9.2.0'),
          StringStruct('InternalName', 'LanPass'),
          StringStruct('LegalCopyright', '@2026  Thomajesty'),
-         StringStruct('OriginalFilename', 'LanPass_3.9.0.exe'),
+         StringStruct('OriginalFilename', 'LanPass_3.9.2.exe'),
          StringStruct('ProductName', 'LanPass'),
-         StringStruct('ProductVersion', '3.9.0.0'),
+         StringStruct('ProductVersion', '3.9.2.0'),
          StringStruct('Comments',
                       '本地快传（LanPass）—— 局域网两台电脑之间互传文件。'
                       '支持 Windows 7 SP1 / 8 / 8.1 / 10 / 11，'

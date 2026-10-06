@@ -116,7 +116,7 @@ APP = "lanshare-gui"
 #   · 只修 bug / 调体验    → 末位 +1
 #   · 不兼容的协议变更      → 主版本 +1
 # ==========================================================================
-VERSION = "3.9.1"
+VERSION = "3.9.2"
 APP_VER = VERSION                   # 兼容旧引用：两者永远相等，见下方自检断言
 APP_NAME = "LanPass"
 # 中文名。只用在**界面里给用户看的正文**（启动页大标题、帮助文案、自检输出），
@@ -129,7 +129,12 @@ COPYRIGHT = "@2026  Thomajesty"
 # 文档编号：LT-MAN-<版本>，手册封面与页脚都用它，也是从 VERSION 派生
 DOC_NO = "LT-MAN-%s" % VERSION
 DOC_REV = "Rev.A"
-DOC_DATE = "2026-10-04"
+DOC_DATE = "2026-10-06"
+
+# GitHub 仓库坐标（在线更新检查用）。放在常量区而不是硬编码进 URL，
+# 换仓库/做内部分发版时只改这一处。
+GITHUB_OWNER = "Thomajesty"
+GITHUB_REPO = "LanPass"
 
 # 关于页顶部两栏的最小宽度（px@1x）。⚠ 只给 weight+uniform 是**不够**的：
 # uniform 会把两列拉到"各自自然宽度的最大值"，左栏是文字（~208px）右栏是图
@@ -1594,6 +1599,356 @@ def _collect(data, src_ip, found):
 # 严重的甚至把文件流量送出公网。所以这里建一个"永远直连"的 opener。
 # ==========================================================================
 DIRECT_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+# ==========================================================================
+# 在线更新检查（v3.9.2）
+# --------------------------------------------------------------------------
+# 目标：用户上传新 Release 后，程序能**主动告知有新版本**，而不是让人自己
+# 去比对版本号。只做"检查 + 通知"，**下载一律交给浏览器**（点按钮打开网页）。
+# 为什么不做自动下载替换：
+#   ① 正在运行的 exe 被 Windows 锁着，要替换必须先退出程序再重启，
+#      一次更新要用户点三次确认，体验反而更差；
+#   ② 绿色免安装软件，exe 可能放在 U 盘 / 网盘 / 只读目录里，
+#      原地覆盖会失败；
+#   ③ 自动下载 exe 最容易被杀毒软件直接拦下，用户的信任成本最高。
+# 交给浏览器还有个附带好处：浏览器里能顺手看校验值、看更新说明。
+#
+# ⚠⚠ 安全红线（踩过就别改）：**绝不能复用 make_client_ssl_context()**。
+# 那个是给局域网自签证书用的，verify_mode=CERT_NONE + check_hostname=False，
+# 拿来访问公网等于完全不验签、可被中间人替换。这里另起一个走系统默认
+# 校验的 opener —— HTTPS 证书链该验就验，这和"局域网内不验证自签证书"
+# 是两件不同的事。
+#
+# ⚠ 也不能复用 DIRECT_OPENER：它是为了让**局域网**请求绕过系统代理而存在的；
+# 而更新检查恰恰相反 —— 很多公司网络/国内家庭宽带要靠系统代理才能出网，
+# 强行直连反而会被墙掉或超时。两个 opener 用途相反，各管各的。
+# ==========================================================================
+
+UPDATE_URL = ("https://api.github.com/repos/%s/%s/releases/latest"
+              % (GITHUB_OWNER, GITHUB_REPO))
+UPDATE_TIMEOUT = 8          # 秒。超时短一点，宁可这次查不到下次再说
+UPDATE_DELAY = 12# 秒。启动后等这么久，避开开机抢网 / 磁盘忙的那阵
+UPDATE_COOLDOWN = 86400     # 24 小时内不重复提示同一个版本
+
+# 走系统默认证书校验（不装 ProxyHandler / 不装自定义 SSLHandler）
+_UPDATE_OPENER = urllib.request.build_opener()
+
+
+def _ver_tuple(s):
+    """'3.9.1' / 'v3.9.1' -> (3, 9, 1)。不是数字的段一律当 0。
+
+    为什么不用 distutils.LooseVersion：那个在 3.12 已从标准库移除，
+    本项目要跑 3.8~3.13，不能依赖它。版本号格式是固定的 主.次.修订
+    （见 VERSION 处的递增规则），所以手写这个足够。
+    """
+    s = str(s or "").strip().lstrip("vV")
+    out = []
+    for seg in s.split("."):
+        d = ""
+        for ch in seg:
+            if ch.isdigit():
+                d += ch
+            else:
+                break
+        out.append(int(d) if d else 0)
+    while len(out) < 3:
+        out.append(0)
+    return tuple(out[:3])
+
+
+def _update_notes(d, limit=420):
+    """把 Release 的 Markdown 更新说明压成适合弹窗的一段纯文本。
+
+    Release 说明是给网页看的，带 # 标题、- 列表、| 表格、代码块。直接塞进
+    messagebox 会一屏乱码还撑爆窗口。这里只留正文行、去掉标记、压空白。
+
+    ⚠ 约定：发布 Release 时把「本次改了什么」写在**第一个 H1 之后**，
+    用 `## 本版要点` 小节标起来。弹窗**只取这个小节**，否则用户看到的是
+    「核心能力 / 适合什么场景 / 系统要求」这类万年不变的说明，
+    完全看不出这次更新了什么 —— 那是噪音，不是通知。
+    """
+    lines = (d or "").splitlines()
+
+    # 第一段：找「本版要点」小节的起止行号。
+    # ⚠ 要点正文在小节标题**下面**（start 是标题行的下一行），
+    # 取"标题之前"等于全丢掉 —— 这个方向搞反过一次。
+    BEGIN = ("本版要点", "本次要点", "本版更新", "更新内容", "本次更新",
+             "更新说明", "本版改进", "改了什么")
+    start = end = -1
+    for i, raw in enumerate(lines):
+        s = raw.strip()
+        if not s.startswith("#"):
+            continue
+        title = s.lstrip("#").strip()
+        if start < 0:
+            if any(title.startswith(k) for k in BEGIN):
+                start = i + 1
+        else:
+            end = i          # 撞上下一个标题就收工
+            break
+    if start > 0:
+        body = lines[start:end if end > start else len(lines)]
+    else:
+        body = lines         # 没有要点小节 → 退回取整个正文的前若干行
+
+    out = []
+    in_code = False
+    for raw in body:
+        line = raw.strip()
+        # 代码块要**成对**判断：只判起始 ``` 的话，块里的内容会漏进弹窗
+        if line.startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code or not line:
+            continue
+        if line.startswith(("#", ">", "|", "---", "===")):
+            continue
+        line = line.lstrip("-*+ ").strip()
+        # 行内标记统一去掉：加粗、反引号、链接只留文字
+        line = line.replace("**", "").replace("__", "").replace("`", "")
+        if "](" in line:
+            line = line.split("](")[0] + line.rsplit(")", 1)[-1]
+        line = line.replace("*", "").strip()
+        if not line or line.startswith("---"):
+            continue
+        out.append("· " + line)
+        if sum(len(x) for x in out) > limit:
+            break
+    return "\n".join(out)
+
+
+def fetch_latest_release(manual=False):
+    """问 GitHub 要最新的正式版。
+
+    返回 dict：``{"ver": "3.9.1", "url": ..., "notes": "..."}``；
+    没有更新或任何环节失败都返回 ``None``。
+
+    ⚠ **失败一律静默返回 None**（manual=True 时由调用方决定要不要给提示）。
+    原因：本工具的主功能是局域网传文件，绝大多数用户是内网环境、
+    GitHub 可能根本不可达，绝不能因为查不到版本就弹窗打扰甚至影响启动。
+    """
+    req = urllib.request.Request(
+        UPDATE_URL,
+        headers={
+            # GitHub API 对没有 User-Agent 的请求会直接 403
+            "User-Agent": "%s/%s" % (APP_NAME, VERSION),
+            "Accept": "application/vnd.github+json",
+        })
+    try:
+        with _UPDATE_OPENER.open(req, timeout=UPDATE_TIMEOUT) as r:
+            d = json.loads(r.read().decode("utf-8", "replace"))
+    except Exception:
+        # 网络不通 / 被墙 / 证书不认 / 限流 / 返回格式变了 —— 一律不当回事
+        return None
+
+    # 草稿和预发布不算更新
+    if d.get("draft") or d.get("prerelease"):
+        return None
+    tag = str(d.get("tag_name") or "").strip()
+    if not tag:
+        return None
+    newest = tag.lstrip("vV")
+    if _ver_tuple(newest) <= _ver_tuple(VERSION):
+        return None
+
+    return {
+        "ver": newest,
+        "url": d.get("html_url") or "",
+        "notes": _update_notes(d.get("body")),
+        "size": next((a.get("size") for a in (d.get("assets") or [])
+                      if str(a.get("name", "")).lower().endswith(".exe")), 0),
+    }
+
+
+def _update_state(manual=False):
+    """统一的状态判断与状态落盘。返回要弹窗的内容（不需要弹时返回 None）。
+
+    记在配置里的三个键：
+      update_last_check   上次**成功**查到的时间戳（毫秒）
+      update_seen_ver     用户点过"以后再说"的那个版本号
+    存"上次成功"而不是"上次尝试"：查不到就别拖到 24 小时后再查，
+    否则断网三天的人每次启动都要等那一次超时。
+    """
+    conf = load_conf()
+    now = int(time.time())
+    if not manual:
+        last = conf.get("update_last_check", 0)
+        # 同一天不重复问；manual 传入时永远放行
+        if last and (now - last) < UPDATE_COOLDOWN:
+            return None
+
+    info = fetch_latest_release(manual=manual)
+    if info is None:
+        if manual:
+            return {"state": "unknown"}
+        # 静默失败：**不写** update_last_check，让下次启动还能重试
+        return None
+
+    if info["ver"] == conf.get("update_seen_ver"):
+        return None            # 这个版本用户已经知道了
+
+    conf["update_last_check"] = now
+    save_conf(conf)
+    return {"state": "new", "info": info}
+
+
+def mark_update_seen(ver):
+    """用户点"以后再说"：记下版本号，同一个版本不再烦他。"""
+    conf = load_conf()
+    conf["update_seen_ver"] = ver
+    conf["update_last_check"] = int(time.time())
+    save_conf(conf)
+
+
+def _update_page_url():
+    """项目主页（打不开时的兜底：用户可以自己去那儿看版本）。"""
+    return "https://github.com/%s/%s/releases" % (GITHUB_OWNER, GITHUB_REPO)
+
+
+def update_check_async(win, delay=UPDATE_DELAY):
+    """启动后延迟一会儿在后台静默查一次更新，查到就通知。
+
+    ⚠ **必须后台线程**：这是启动路径上的调用，主线程正忙着建界面，
+    同步查会卡住窗口 8 秒。
+    ⚠ 回调一律经窗口自己的跨线程入口回主线程 —— 后台线程碰 Tk 会挂死。
+    ⚠⚠ 两个主窗口的入口名字不一样：发送端是 `ui_q`（+ `_drain` 消费），
+    接收端是 `post()`。这里两种都认，别写死。
+    """
+    def _work():
+        res = _update_state(manual=False)
+        if not res or res.get("state") != "new":
+            return                                  # 无更新 / 失败 → 全静默
+        info = res["info"]
+
+        def _ui():
+            try:
+                if getattr(win, "_closing", False):
+                    return
+                _UpdateDialog(win, info).show()
+            except Exception:
+                pass
+        try:
+            post = getattr(win, "post", None)
+            if callable(post):
+                post(_ui)                          # 接收端
+            else:                                   # 发送端：老式队列
+                win.ui_q.put(_ui)
+        except Exception:
+            pass
+
+    def _go():
+        try:
+            threading.Thread(target=_work, daemon=True).start()
+        except Exception:
+            pass
+    try:
+        win.root.after(int(delay * 1000), _go)
+    except Exception:
+        pass
+
+
+class _UpdateDialog(object):
+    """「发现新版本」的模态提示窗。
+
+    为什么自己搭窗而不用 messagebox：想在「已是最新」时**不打扰**，
+    而 messagebox 只有一种形态。自搭窗能把「以后再说」做成默认动作，
+    并且【关于】页开着时把提示挂到它上面。
+    """
+
+    def __init__(self, owner, info):
+        self.owner = owner
+        self.info = info
+        self.top = None
+
+    def show(self):
+        if tk is None:
+            return
+        ver = self.info.get("ver", "")
+        # ⚠ 父窗句柄：主窗口叫 .root，【关于】窗口叫 .top，两个都得认。
+        #   只认 .root 的话，从【关于】页触发时 parent=None，弹窗就成了
+        #   没有 transient 关系的独立窗口，容易掉到主窗口后面去。
+        parent = None
+        try:
+            parent = self.owner.root
+        except Exception:
+            try:
+                parent = self.owner.top
+            except Exception:
+                parent = None
+        t = tk.Toplevel(parent)
+        self.top = t
+        t.title("发现新版本")
+        try:
+            t.transient(parent)
+            t.resizable(False, False)
+        except Exception:
+            pass
+
+        box = tk.Frame(t, bg=C_CARD)
+        box.pack(fill=tk.BOTH, expand=True, padx=px(18), pady=px(16))
+
+        tk.Label(box, text="发现新版本  %s" % ver,
+                 bg=C_CARD, fg=C_TXT, anchor="w",
+                 font=("Microsoft YaHei UI", 12, "bold")).pack(
+                     fill=tk.X, pady=(0, px(2)))
+        tk.Label(box, text="当前版本 %s　·　%s" % (APP_VER, self._size_txt()),
+                 bg=C_CARD, fg=C_TXT3, anchor="w",
+                 font=FONT_S).pack(fill=tk.X, pady=(0, px(8)))
+
+        notes = self.info.get("notes") or ""
+        if notes:
+            # 限制行数：说明再长也不该把窗撑到屏幕外
+            body = "\n".join(notes.splitlines()[:10])
+            # anchor/justify 用字符串字面量（无头自检的 Tk 是桩，
+            # tkinter 模块上没有 tk.NW 这个常量，写 tk.NW 会让 selftest 崩）
+            tk.Label(box, text=body, bg=C_CARD, fg=C_TXT2, anchor="nw",
+                     justify="left", font=FONT_S).pack(fill=tk.BOTH, expand=True)
+
+        btns = tk.Frame(box, bg=C_CARD)
+        btns.pack(fill=tk.X, pady=(px(12), 0))
+        ttk.Button(btns, text="以后再说", style="About.TButton",
+                   command=self._later).pack(side=tk.LEFT)
+        ttk.Button(btns, text="去下载", style="Accent.TButton",
+                   command=self._go).pack(side=tk.RIGHT)
+
+        t.bind("<Escape>", lambda e: self._later())
+        try:
+            t.protocol("WM_DELETE_WINDOW", self._later)
+            t.grab_set()
+        except Exception:
+            pass
+        try:
+            t.bell()
+        except Exception:
+            pass
+
+    def _size_txt(self):
+        n = self.info.get("size") or 0
+        return ("安装包 %.1f MB" % (n / 1048576.0)) if n else ""
+
+    def _later(self):
+        try:
+            mark_update_seen(self.info.get("ver", ""))
+        except Exception:
+            pass
+        try:
+            if self.top is not None:
+                self.top.destroy()
+        except Exception:
+            pass
+
+    def _go(self):
+        self._later()
+        url = self.info.get("url") or _update_page_url()
+        try:
+            os.startfile(url)
+        except Exception:
+            try:
+                import webbrowser
+                webbrowser.open(url)
+            except Exception as e:  # noqa
+                _safe_err("打开浏览器失败: %r\n" % (e,))
+
 
 # ==========================================================================
 # UPnP 端口映射（v3.7 隔 NAT 优化 A）
@@ -15377,6 +15732,9 @@ class SenderWindow(object):
         sb.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        # 启动后静默查一次更新（v3.9.2）。延迟十几秒 + 后台线程，
+        # 绝不占住界面；查不到也不打扰。
+        update_check_async(self)
 
     # ---- 令牌 / 证书 ----
     def _refresh_share_label(self):
@@ -16092,6 +16450,9 @@ class ReceiverWindow(object):
         # 结果软件一打开就"自己动起来"，用户还没看清状态就在连了。
         # 现在统一由用户点【连接】或【扫描】后再动。
         self.root.after(200, self._tick)
+        # 启动后静默查一次更新（v3.9.2）。延迟十几秒 + 后台线程，
+        # 绝不占住界面；查不到也不打扰（见 update_check_async 的说明）。
+        update_check_async(self)
 
     # ---------- 跨线程安全更新界面 ----------
     def post(self, fn, *a, **kw):
@@ -18907,6 +19268,34 @@ class AboutWindow(object):
         self.intro_lbl = para(ABOUT_INTRO)
         section("适用场景")
         self.scene_lbl = para(ABOUT_SCENES, color=C_TXT3, font=FONT_S)
+        # ---------- 版本与更新（v3.9.2 新增） ----------
+        # 这一节只有一行小字 + 一个按钮，形态和其他"纯文字"小节不同，
+        # 所以单独搭，不用 para()。
+        # ⚠ Label 与 Button 并排时高度要对齐：实测 About.TButton 的 req 高
+        #   是 36px，而 FONT_S 的 Label 只有 25px，直接并排会一高一矮。
+        #   用固定 height + 垂直居中的 anchor 把两者拉平（实测中心差 0px）。
+        # ⚠ anchor/justify 用**字符串字面量**而不是 tk.W / tk.LEFT ——
+        #   无头自检环境的 Tk 是桩，tkinter 模块上根本没有这些常量，
+        #   写成 tk.W 会让整个 selftest 在建窗那一步崩掉。
+        section("版本与更新")
+        # ⚠⚠ 父容器必须是 **body**（正文滚动容器），不是 card。
+        #   card 是顶部 logo/二维码那个容器，写成 card 的话这一行会被塞到
+        #   顶部区里、body 里只剩一个孤零零的小节标题 —— 表现是
+        #   「版本与更新」标题在，下面直接就是「运行环境」，内容凭空消失。
+        upbox = tk.Frame(body, bg=C_CARD)
+        upbox.pack(fill=tk.X, pady=(0, px(1)))
+        self.upd_lbl = tk.Label(
+            upbox, text="当前版本 %s　·　可点右侧按钮检查有没有新版本" % APP_VER,
+            bg=C_CARD, fg=C_TXT3, font=FONT_S, anchor="w", justify="left")
+        # ⚠ 不要写死 height=2：窗口被缩窄时这一行会折成两行，写死行数会把
+        #   第二行裁掉。改成自然高度 + fill=tk.Y —— Tk 的 Label 默认
+        #   anchor 就是 center（配合 anchor="w" 只影响水平方向），
+        #   垂直方向自动居中，于是无论 upbox 多高都与右侧按钮中心齐平。
+        self.upd_lbl.pack(side=tk.LEFT, fill=tk.Y, pady=(0, px(1)))
+        self.upd_btn = ttk.Button(upbox, text="检查更新",
+                                  style="About.TButton",
+                                  command=self.check_update_manual)
+        self.upd_btn.pack(side=tk.RIGHT, padx=(px(8), 0), pady=(0, px(1)))
         section("运行环境")
         self.sys_lbl = para(ABOUT_SYS)
         # 光写"支持到 Win7"还不够 —— 用户真正想确认的是"我这台到底行不行"，
@@ -19126,6 +19515,92 @@ class AboutWindow(object):
             self.top.destroy()
         except Exception:
             pass
+
+    # ---------- 在线更新（v3.9.2） ----------
+    def check_update_manual(self, _ev=None):
+        """【关于】页那个「检查更新」按钮。
+
+        与启动时的静默检查只有一处不同：**结果一定给用户看**
+        （有更新 / 已是最新 / 查不到），因为是他主动点的。
+        """
+        self.upd_btn.configure(state=tk.DISABLED, text="正在检查…")
+        self.top.update_idletasks()
+        # 主线程同步查：点按钮本来就是个会等一下的动作，8 秒超时在
+        # 按钮的禁用态里看得见，比"点了没反应"好。**不放后台线程**，
+        # 因为 AboutWindow 没有 post()，回调回主线程还得再绕一圈。
+        res = _update_state(manual=True)
+        try:
+            self.upd_btn.configure(state=tk.NORMAL, text="检查更新")
+        except Exception:
+            pass
+        if res is None:
+            return                                # 关窗了
+        if res.get("state") == "unknown":
+            self._say_update(
+                "暂时查不到",
+                "连不上 GitHub 的更新服务器。\n\n"
+                "可能这台机器所在的网络访问不了 GitHub（公司内网、或没开代理）。\n"
+                "这不影响本机任何功能，局域网内传文件照常用。\n\n"
+                "过一会儿再点一次，或者直接到项目页手动下载：\n%s"
+                % _update_page_url())
+            return
+        self._show_update(res["info"])
+
+    def _say_update(self, title, body):
+        """纯文字提示（无新版本、查不到失败时用）。"""
+        try:
+            if tk is None:
+                return
+            self.top.bell()
+            messagebox.showinfo(title, body, parent=self.top)
+        except Exception:
+            pass
+
+    def _show_update(self, info):
+        """有新版本：把「版本号 + 本次改了什么 + 去哪下」摆出来。"""
+        ver = info.get("ver", "")
+        size = info.get("size") or 0
+        mb = "%.1f MB" % (size / 1048576.0) if size else ""
+        head = "发现新版本  %s  （当前 %s）" % (ver, APP_VER)
+        if mb:
+            head += "\n安装包 %s" % mb
+        notes = info.get("notes") or ""
+        body = head
+        if notes:
+            body += "\n\n本版更新\n" + notes
+        body += "\n\n点【是】打开项目页面，在浏览器里下载安装包；点【否】以后再说。"
+        try:
+            if tk is None:
+                return
+            self.top.bell()
+            # ⚠ askyesno 用的是 Tk 固定的「是 / 否」两个按钮，**不支持自定义文字**
+            #（传 yesno=... 会被静默忽略），所以按钮含义写进正文里。
+            ok = messagebox.askyesno("发现新版本", body, parent=self.top,
+                                     default="yes")
+        except Exception:
+            ok = False
+        if ok:
+            self._open_url(info.get("url") or _update_page_url())
+        # 无论点了是/否，都记下"这个版本我知道了"——
+        # 点了【是】已经去下载了，再弹一次纯烦人。
+        try:
+            mark_update_seen(ver)
+        except Exception:
+            pass
+
+    def _open_url(self, url):
+        if not url:
+            return
+        try:
+            os.startfile(url)                       # Windows
+            return
+        except Exception:
+            pass
+        try:
+            import webbrowser
+            webbrowser.open(url)
+        except Exception as e:  # noqa
+            _safe_err("打开浏览器失败: %r\n" % (e,))
 
 
 def open_about(owner=None):
