@@ -149,6 +149,21 @@ python lanshare_gui.py
 这个工具完全免费，没有任何功能限制和付费解锁。如果它帮你省下了插 U 盘、发微信传文件的麻烦，
 可以扫码请我喝杯咖啡 —— 你的支持是我持续维护下去的动力。
 
-<p align="center">
-  <img src="dist/support-qrcodes.png" alt="微信 / 支付宝 赞赏码" width="720">
-</p>
+<!--
+  赞赏码取图地址用 jsDelivr CDN 作主源、raw.githubusercontent.com 作兜底。
+  ⚠ 起因（2026-10-06 实测）：原来写的是仓库内相对路径 dist/support-qrcodes.png，
+    相对路径本身**没错** —— GitHub 渲染 README 时按仓库内容解析，不是浏览器那套
+    "相对当前页面 URL"的规则。真正的原因是 **raw.githubusercontent.com 在国内被
+    阻断**（本机连 3 次全部 WinError 10054 连接重置，而 api.github.com 正常），
+    而 GitHub 网页显示仓库内图片取的正是 raw 地址 ⇒ 仓库首页那张图裂成占位框。
+  实测可达性：cdn.jsdelivr.net 366,041 字节 PNG 本体（与本地/远端字节数一致）✔
+              gcore.jsdelivr.net 同上 ✔   statically.io 连接被拒 ✘
+  ⚠ 别改回单 <img src="dist/...">：国外用户能看、国内用户全是裂图。
+  ⚠ 别改回纯 jsDelivr 单源：CDN 挂了图就没了，<picture> 第二源是保险。
+-->
+<picture>
+  <source srcset="https://cdn.jsdelivr.net/gh/Thomajesty/LanPass@main/dist/support-qrcodes.png"
+          type="image/png">
+  <img src="https://raw.githubusercontent.com/Thomajesty/LanPass/main/dist/support-qrcodes.png"
+       alt="微信 / 支付宝 赞赏码" width="720">
+</picture>
