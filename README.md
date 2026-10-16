@@ -165,5 +165,5 @@ python lanshare_gui.py
   <source srcset="https://cdn.jsdelivr.net/gh/Thomajesty/LanPass@main/dist/support-qrcodes.png"
           type="image/png">
   <img src="https://raw.githubusercontent.com/Thomajesty/LanPass/main/dist/support-qrcodes.png"
-       alt="微信 / 支付宝 赞赏码" width="720">
+       alt="微信 / 支付宝 赞赏码" width="360">
 </picture>
